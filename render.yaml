@@ -1,0 +1,31 @@
+# Frontend and Express API share one service and one origin.
+# Connect this repository as a Render Blueprint once; later main pushes deploy.
+services:
+  - type: web
+    name: fiqqu
+    runtime: node
+    plan: free
+    repo: https://github.com/syedfaiqali/Ai-Assistant
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: npm ci --include=dev && npm test && npm run build && npm run check:bundle
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DEFAULT_CHAT_MODEL
+        value: cognitivecomputations/dolphin-mistral-24b-venice-edition
+      - key: CHAT_MODEL_ALLOWLIST
+        value: cognitivecomputations/dolphin-mistral-24b-venice-edition
+      - key: IMAGE_MODEL
+        value: gpt-image-1-mini
+# Set provider credentials in Render's Environment tab, not in this file.
+# Without them, the deployed UI supports Demo and displays setup states.
+# OPENROUTER_API_KEY, OPENROUTER_API_KEY_2, OPENROUTER_API_KEY_3
+# OPENAI_IMAGE_API_KEY
+# Add authentication and per-user quotas before sharing a credentialed proxy.
