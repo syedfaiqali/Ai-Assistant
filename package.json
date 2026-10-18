@@ -1,7 +1,7 @@
 {
   "name": "luma-assistant", "version": "1.0.0", "private": true, "type": "module",
   "scripts": {
-    "dev": "node scripts/dev.mjs", "dev:web": "vite --host 127.0.0.1", "dev:server": "tsx watch server/index.ts",
+    "dev": "node scripts/dev.mjs", "dev:web": "vite --host 127.0.0.1", "dev:server": "tsx watch --include server/.env server/index.ts",
     "build": "tsc --noEmit && vite build && tsc -p server/tsconfig.json",
     "start": "node server/dist/server/index.js", "test": "tsx --test tests/*.test.ts", "test:browser": "node scripts/browser-check.mjs", "check:bundle": "node scripts/check-bundle.mjs"
   },

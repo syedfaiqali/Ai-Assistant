@@ -1,0 +1,20 @@
+.select-root{display:block;min-width:0;width:100%;font-weight:400}
+.select-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-width:0;min-height:39px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;line-height:1.5;text-align:left;transition:border-color .15s,background .15s,box-shadow .15s}
+.select-trigger:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 50%,var(--line));background:var(--hover)}
+.select-trigger[aria-expanded=true]{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.select-value{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.select-placeholder{color:var(--muted)}
+.select-chevron{color:var(--muted);transition:transform .15s;flex-shrink:0}
+.select-trigger[aria-expanded=true] .select-chevron{transform:rotate(180deg);color:var(--accent)}
+.select-root--inline .select-trigger{min-height:34px;padding:6px 8px;border-color:transparent;background:transparent;font-weight:550}
+.select-root--inline .select-trigger:hover:not(:disabled),.select-root--inline .select-trigger[aria-expanded=true]{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
+.model-select .select-root{max-width:320px}
+.select-menu{position:fixed;z-index:1000;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:5px;border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--text);box-shadow:0 12px 36px #0003,0 2px 7px #0001;font:12px/1.5 var(--font-sans);text-align:left}
+.select-option{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:38px;padding:9px 10px;border-radius:6px;cursor:pointer;user-select:none}
+.select-option>span{min-width:0;overflow-wrap:anywhere}
+.select-option>svg{flex-shrink:0;color:var(--accent)}
+.select-option.is-active{background:var(--hover)}
+.select-option.is-selected{color:var(--accent);background:var(--accent-soft);font-weight:550}
+.select-option[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.image-options .select-root{min-width:170px}
+@media(max-width:767px){.model-select .select-root{max-width:190px}.select-root--inline .select-trigger{font-size:11px;gap:6px;padding:6px}.select-menu{font-size:13px}.select-option{min-height:42px}.image-options .select-root{min-width:145px}}

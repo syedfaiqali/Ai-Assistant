@@ -5,7 +5,8 @@ import { config } from './config.js';
 import { HttpError, safeError } from './errors.js';
 import { validateChat, validateImage, imageSizes } from './validation.js';
 import { OpenRouterProvider, OpenAIImageProvider, relayStream, type ChatProvider, type ImageProvider } from './services.js';
-export function createApp(chat: ChatProvider = new OpenRouterProvider(), image: ImageProvider = new OpenAIImageProvider()) {
+import { OllamaProvider } from './ollama.js';
+export function createApp(chat: ChatProvider = config.chatProvider === 'ollama' ? new OllamaProvider() : new OpenRouterProvider(), image: ImageProvider = new OpenAIImageProvider()) {
   const app = express(); app.disable('x-powered-by');
   app.use('/api', (req,res,next) => {
     res.setHeader('Cache-Control','no-store'); res.setHeader('X-Content-Type-Options','nosniff');
@@ -24,7 +25,7 @@ export function createApp(chat: ChatProvider = new OpenRouterProvider(), image: 
     if (bucket.count > 40 || buckets.size > 10000) { res.setHeader('Retry-After','60'); return res.status(429).json({error:{code:'rate_limit',message:'Too many requests. Please wait a minute.'}}); }
     next();
   });
-  const health = () => ({chatConfigured:config.chatKeys.length > 0, imageConfigured:Boolean(config.imageKey), imageModel:config.imageKey ? config.imageModel : null});
+  const health = () => ({chatConfigured:config.chatProvider === 'ollama' || config.chatKeys.length > 0, chatProvider:config.chatProvider, imageConfigured:Boolean(config.imageKey), imageModel:config.imageKey ? config.imageModel : null});
   app.get('/api/health',(_req,res) => res.json(health()));
   app.get('/api/models', async (_req,res,next) => { try { res.json({models:await chat.models(AbortSignal.timeout(15000)),defaultModel:config.defaultModel}); } catch(e) { next(e); } });
   app.get('/api/images/config',(_req,res) => res.json({configured:Boolean(config.imageKey),model:config.imageKey ? config.imageModel : null,sizes:imageSizes}));

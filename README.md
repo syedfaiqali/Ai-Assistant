@@ -30,13 +30,38 @@ npm.cmd start
 
 ## Providers and configuration
 
+### Local Ollama chat
+
+On Windows, `powershell.exe -ExecutionPolicy Bypass -File scripts/setup-ollama.ps1` installs Ollama if needed, downloads the smaller `dolphin-phi:latest` first, tests a local response, and switches the app to it. It then resumes/downloads `dolphin3:latest` and adds it to the model dropdown after verification. The first model remains the default and usable during the second download. Override the queue with `-Model MODEL -NextModel NEXT_MODEL`. Other environment entries are preserved. Status and logs are under `test-results/ollama-setup-status.json` and `test-results/ollama-setup.log`; `activeChatModel` indicates a model already configured for chat while another downloads. Failed pulls retry up to three times; rerun the command to resume after that. Keep the computer on and connected. The installer is verified against its pinned SHA256 before running. Only run one setup at a time.
+
+Install [Ollama for Windows](https://ollama.com/download/windows), leave the Ollama app running, and download a model with `ollama pull dolphin3`. Local inference uses your computer; there is no per-request provider charge. Model download size and runtime memory are different; speed and memory use depend on hardware and conversation length.
+
+Set these values in `server/.env`:
+
+```dotenv
+CHAT_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
+DEFAULT_CHAT_MODEL=dolphin3:latest
+CHAT_MODEL_ALLOWLIST=dolphin3:latest
+```
+
+Use exact installed IDs from `ollama list`, including tags such as `:latest`. Restart `npm.cmd run dev`, open http://127.0.0.1:5173, disable Demo in Settings, and select the local model. The existing chat history, character profiles, streaming, Retry and Stop work through the same backend routes. Only installed models in the allowlist are offered. Ollama must run separately from the FE/BE development command. If the API cannot reach it, the UI reports a connection error; it never falls back to a paid provider. Keep the API on localhost for local use.
+
+To return to OpenRouter, set `CHAT_PROVIDER=openrouter` and restore your OpenRouter `DEFAULT_CHAT_MODEL` and `CHAT_MODEL_ALLOWLIST`. Existing OpenRouter keys can stay in `server/.env` but are not sent to Ollama. Image studio continues to use its separate image provider. For hosted deployments, localhost refers to the hosting machine, not your PC.
+
+Local requests use compact application instructions and cap generated replies at 256 tokens to reduce CPU latency. Character fields and conversation history are preserved. Model loading, large profiles and long histories still affect time to first text; the small Dolphin Phi model has a limited context and may produce poor answers. This optimization does not guarantee answer quality or cloud-level speed.
+
+### Configuration reference
+
 Place the real environment file at **`server/.env`**, next to `server/index.ts`. It is ignored by Git. Do not use `VITE_` variables for secrets. Environment variables supplied by the host take precedence.
 
 | Variable | Purpose |
 | --- | --- |
+| `CHAT_PROVIDER` | `openrouter` (default) or `ollama` |
+| `OLLAMA_BASE_URL` | Local API base URL; defaults to `http://127.0.0.1:11434/v1` |
 | `OPENROUTER_API_KEY` | Primary backend chat credential (also accepts `_1` when this is empty) |
 | `OPENROUTER_API_KEY_2`, `OPENROUTER_API_KEY_3` | Optional ordered backup credentials |
-| `DEFAULT_CHAT_MODEL` | Initial model; defaults to `openrouter/free` |
+| `DEFAULT_CHAT_MODEL` | Initial model; defaults to `openrouter/free`, or `dolphin3:latest` for Ollama |
 | `CHAT_MODEL_ALLOWLIST` | Comma-separated exact model IDs permitted by the API |
 | `OPENAI_IMAGE_API_KEY` | Optional, separate backend image credential |
 | `IMAGE_MODEL` | `gpt-image-1-mini` (default), `gpt-image-1`, or `gpt-image-1.5` |
@@ -71,7 +96,7 @@ Use **Start chat** to create an independent conversation. The profile is copied 
 
 Character data is held in Redux and persisted alongside conversations under schema **version 2**. The legacy storage key is preserved and version 1 Fiqqu conversations migrate without losing their history. JSON export now includes the library and conversation snapshots; **Clear saved data** confirms deletion of both. Avatars accept local PNG/JPEG/WebP files up to 2 MB and are cropped/compressed to 128×128 JPEGs capped at 24,000 data-URL characters. No avatar is fetched from a remote URL or sent upstream to the chat provider. The existing 4-million-character local storage limit applies across characters and conversations; export if storage is full.
 
-Express validates every profile before generation. Field limits are defined once in `shared/characters.ts`; descriptions allow 6,000 characters, combined text allows 12,000, and unknown fields, unsupported languages, minors and oversized avatars are rejected. Backend application rules and a separately serialized, explicitly untrusted character data message use OpenRouter's system-message format. Profile data cannot set models, upstream URLs, request options or credentials. Example dialogues remain persona examples rather than fabricated real conversation turns. Character prompts do **not** change model/provider policies or guarantee unrestricted responses; the frontend displays actual streamed responses and sanitized provider errors without fixed refusal text or keyword censorship. Live roleplay quality still depends on the selected model. Demo character replies remain explicitly simulated.
+Express validates every profile before generation. Field limits are defined once in `shared/characters.ts`; descriptions allow 6,000 characters, combined text allows 12,000, and unknown fields, unsupported languages, minors and oversized avatars are rejected. Backend application instructions and a JSON-serialized, explicitly untrusted character profile share one system message, so templates with a single system slot receive both. The displayed opening greeting is excluded from the provider profile. Profile data cannot set models, upstream URLs, request options or credentials. Example dialogues remain persona examples rather than fabricated real conversation turns. Character prompts do **not** change model/provider policies or guarantee unrestricted responses; the frontend displays actual streamed responses and sanitized provider errors without fixed refusal text or keyword censorship. Live roleplay quality still depends on the selected model. Demo character replies remain explicitly simulated.
 
 - New, search, switch, rename, and confirmed deletion of chats. Settings includes JSON export and confirmed deletion of saved chats.
 - Editing a user message removes everything after it and generates a replacement. Retry replaces the last assistant reply without duplicating the user turn.
