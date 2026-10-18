@@ -32,23 +32,37 @@ export default function App() {
   const [settings,setSettings] = useState(false); const [dialog,setDialog] = useState<{kind:'rename'|'delete';id:string;title:string}|null>(null); const [rename,setRename] = useState('');
   const [editing,setEditing] = useState<string|null>(null); const [busyId,setBusyId] = useState<string|null>(null); const [composerError,setComposerError] = useState(''); const [copied,setCopied] = useState('');
   const generation = useRef<{controller:AbortController;conversationId:string;messageId:string;requestId:string}|null>(null);
+  const connectionCheck = useRef<Promise<boolean>|null>(null);
+  const preparing = useRef(false);
   const textarea = useRef<HTMLTextAreaElement>(null); const scroll = useRef<HTMLDivElement>(null); const navigation = useRef<HTMLElement>(null); const follow = useRef(true);
   const active = state.conversations.find(c=>c.id === state.activeId); const busy = !!busyId;
   const character = active?.character;
   const updatedCharacter = character ? state.characters.find(c=>c.id===character.id) : undefined;
   const voiceLanguage = character ? character.preferredLanguage === 'English' ? 'en-US' : 'ur-PK' : state.preferences.language;
   const voice = useVoice(voiceLanguage,state.preferences.muted,text=>{setDraft(d=>d ? `${d} ${text}` : text);textarea.current?.focus();});
-  const checkConnection = useCallback(async (signal?:AbortSignal) => {
-    setChecking(true);setConnectionError('');
-    const results = await Promise.allSettled([getHealth(),getModels()]); if (signal?.aborted) return;
-    if (results[0].status === 'fulfilled') setHealth(results[0].value); else {setHealth(null);setConnectionError(results[0].reason.message);}
-    if (results[1].status === 'fulfilled') { const data = results[1].value; setModels(data.models);const selected = store.getState().selectedModel;
-      if (!data.models.some(m=>m.id === selected)) dispatch(actions.model(data.models.some(m=>m.id === data.defaultModel) ? data.defaultModel : data.models[0]?.id || ''));
-      if (!data.models.length) setConnectionError('No configured chat models are currently available. Update CHAT_MODEL_ALLOWLIST on the backend.');
-    } else {setModels([]); setConnectionError(e=>e || results[1].status === 'rejected' && results[1].reason.message || 'Could not verify model availability.');}
-    setChecking(false);
+  const checkConnection = useCallback(():Promise<boolean> => {
+    if(connectionCheck.current)return connectionCheck.current;
+    setChecking(true);
+    const pending = (async()=>{
+      const results = await Promise.allSettled([getHealth(),getModels()]);
+      const nextHealth = results[0].status === 'fulfilled' ? results[0].value : null;
+      const data = results[1].status === 'fulfilled' ? results[1].value : null;
+      const nextModels = data?.models || [];
+      const selected = store.getState().selectedModel;
+      if (!nextModels.some(m=>m.id === selected)) dispatch(actions.model(nextModels.find(m=>m.id === data?.defaultModel)?.id || nextModels[0]?.id || ''));
+      const error = results[0].status === 'rejected' ? results[0].reason.message
+        : !nextHealth?.chatConfigured ? 'Connect a provider to start, or explore in Demo mode.'
+        : results[1].status === 'rejected' ? results[1].reason.message
+        : !nextModels.length ? 'No configured chat models are currently available. Update CHAT_MODEL_ALLOWLIST on the backend.' : '';
+      setHealth(nextHealth);setModels(nextModels);setConnectionError(error);setChecking(false);
+      return !error;
+    })();
+    connectionCheck.current = pending;
+    void pending.finally(()=>{connectionCheck.current=null;});
+    return pending;
   },[dispatch]);
-  useEffect(()=>{const c = new AbortController();void checkConnection(c.signal);return()=>c.abort();},[checkConnection]);
+  useEffect(()=>{void checkConnection();},[checkConnection]);
+  useEffect(()=>{const refresh=()=>{if(!store.getState().preferences.demo)void checkConnection();};window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);},[checkConnection]);
   useEffect(()=>{const media = window.matchMedia('(prefers-color-scheme: dark)'); const update = () => {document.documentElement.dataset.theme = state.preferences.theme === 'system' ? media.matches ? 'dark' : 'light' : state.preferences.theme;};update();media.addEventListener('change',update);return()=>media.removeEventListener('change',update);},[state.preferences.theme]);
   useEffect(()=>{if(follow.current && scroll.current)scroll.current.scrollTop = scroll.current.scrollHeight;},[active?.messages]);
   useEffect(()=>{follow.current = true;setEditing(null);setDraft('');setComposerError('');voice.stopSpeaking();voice.stopListening();},[state.activeId]);
@@ -96,9 +110,11 @@ export default function App() {
     finally{if(frame!==null)cancelAnimationFrame(frame);if(valid()){generation.current=null;setBusyId(null);}}
   }
   async function send(prompt = draft) {
-    if(busy || !prompt.trim())return;
-    if(!state.preferences.demo && (!health?.chatConfigured || !state.selectedModel || connectionError)){setComposerError(connectionError || 'Live chat needs backend setup. Open Settings to enable Demo, or add OPENROUTER_API_KEY to server/.env.');return;}
+    if(busy || preparing.current || !prompt.trim())return;
     if(prompt.length>12000){setComposerError('Keep your message under 12,000 characters.');return;}
+    preparing.current=true;
+    try {
+    if(!state.preferences.demo && (checking || !liveReady) && !await checkConnection())return;
     voice.stopListening();voice.stopSpeaking();setComposerError('');
     let c=active;let messages:Message[];
     if(!c){if(state.conversations.length>=150){setComposerError('You have 150 saved chats. Export and delete some before starting another.');return;}c={id:crypto.randomUUID(),title:'Untitled chat',messages:[],updatedAt:Date.now()};dispatch(actions.create(c));}
@@ -106,10 +122,12 @@ export default function App() {
     if(editing){const index=c.messages.findIndex(m=>m.id===editing);if(index<0)return;messages=[...c.messages.slice(0,index),message];}
     else {if(c.messages.length>=498){setComposerError('This chat is full. Start a new chat.');return;}messages=[...c.messages,message];}
     setDraft('');setEditing(null);await generate(c.id,messages);
+    } finally {preparing.current=false;}
   }
-  function retry(c:Conversation,index:number){if(busy)return;setComposerError('');if(!state.preferences.demo && (!health?.chatConfigured || !state.selectedModel || connectionError)){setComposerError(connectionError || 'Configure the backend or enable Demo in Settings.');return;}const source=c.messages.slice(0,index);const last=source.at(-1);if(last?.role==='user'){source[source.length-1]={...last,demo:state.preferences.demo};void generate(c.id,source);}}
+  async function retry(c:Conversation,index:number){if(busy || preparing.current)return;preparing.current=true;try{setComposerError('');if(!state.preferences.demo && (checking || !liveReady) && !await checkConnection())return;const source=c.messages.slice(0,index);const last=source.at(-1);if(last?.role==='user'){source[source.length-1]={...last,demo:state.preferences.demo};await generate(c.id,source);}}finally{preparing.current=false;}}
   async function copy(message:Message){try{await navigator.clipboard.writeText(message.content);setCopied(message.id);setTimeout(()=>setCopied(''),2000);}catch{setComposerError('Clipboard access is unavailable. Select the message text to copy it.');}}
-  const status = state.preferences.demo ? 'Demo mode' : checking ? 'Connecting' : health?.chatConfigured && !connectionError ? 'Live connection' : 'Setup needed';
+  const liveReady = !!health?.chatConfigured && models.some(m=>m.id===state.selectedModel) && !connectionError;
+  const status = state.preferences.demo ? 'Demo mode' : checking ? 'Connecting' : liveReady ? 'Live connection' : 'Setup needed';
   const filtered = state.conversations.filter(c=>c.title.toLowerCase().includes(search.toLowerCase()));
   return <div className={`app-shell ${sidebar ? '' : 'sidebar-collapsed'}`}>
     {mobileSidebar && <button className="drawer-overlay" aria-label="Close navigation" onClick={()=>setMobileSidebar(false)}/>}
