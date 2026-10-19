@@ -18,7 +18,10 @@ test('compact local prompts preserve the character and actual history with subst
   const character=profile();const full=withAssistantIdentity(history,character);const compact=withAssistantIdentity(history,character,true);
   assert.ok(compact[0].content.length < full[0].content.length*0.5);
   assert.equal(compact.filter(m=>m.role==='system').length,1);assert.deepEqual(compact.slice(1),history);
-  for(const field of ['name','preferredLanguage','description','personality','speakingStyle'] as const)assert.ok(compact[0].content.includes(`${field}: ${JSON.stringify(character[field])}`));
+  const fields=['name','gender','pronouns','age','preferredLanguage','description','personality','background','speakingStyle','exampleDialogue'] as const;
+  for(const field of fields)assert.ok(compact[0].content.includes(`${field}: ${JSON.stringify(character[field])}`));
+  const profileLength=fields.reduce((total,field)=>total+JSON.stringify(character[field]).length,0);
+  assert.ok(compact[0].content.length-profileLength < 1400,'local instructions must stay small without dropping character details');
   assert.equal(compact[0].content.includes(character.openingGreeting),false);assert.equal(history[0].content,'Hello Zara');
   assert.equal(compact[0].content.includes("You are Fiqqu, Faiq's personal AI assistant"),false);
   assert.match(compact[0].content,/not addressing the user by that name/);assert.match(compact[0].content,/Reply only as "Zara" in Roman Urdu/);
